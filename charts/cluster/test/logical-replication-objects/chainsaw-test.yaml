@@ -1,0 +1,139 @@
+##
+# This test verifies CNPG logical replication with specific table objects.
+# Test flow:
+# 1. Create publisher cluster with wal_level: logical
+# 2. Create two tables (users, orders) and insert data - only users is published
+# 3. Verify publication CRD is ready
+# 4. Create subscriber cluster with subscription
+# 5. Create users table schema on subscriber (orders is NOT created)
+# 6. Wait for subscription to become Applied
+# 7. Insert additional data on publisher (both tables)
+# 8. Verify only users data replicates to subscriber, orders does NOT
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: logical-replication-objects
+spec:
+  timeouts:
+    apply: 1s
+    assert: 3m
+    cleanup: 1m
+  steps:
+    - name: Install the publisher cluster
+      try:
+        - script:
+            content: |
+              helm upgrade \
+                --install \
+                --namespace $NAMESPACE \
+                --values ./01-publisher-cluster.yaml \
+                --wait \
+                publisher ../../
+        - assert:
+            file: ./01-publisher-cluster-assert.yaml
+      catch:
+        - describe:
+            apiVersion: postgresql.cnpg.io/v1
+            kind: Cluster
+    - name: Create tables and publication on publisher
+      try:
+        - apply:
+            file: ./02-create-table-and-publication.yaml
+        - assert:
+            file: ./02-create-table-and-publication-assert.yaml
+      catch:
+        - describe:
+            apiVersion: batch/v1
+            kind: Job
+        - podLogs:
+            selector: batch.kubernetes.io/job-name=create-table-and-publication
+    - name: Verify publication CRD is ready
+      timeouts:
+        assert: 2m
+      try:
+        - assert:
+            file: ./02-publication-assert.yaml
+    - name: Install the subscriber cluster
+      try:
+        - script:
+            content: |
+              helm upgrade \
+                --install \
+                --namespace $NAMESPACE \
+                --values ./03-subscriber-cluster.yaml \
+                --wait \
+                subscriber ../../
+        - assert:
+            file: ./03-subscriber-cluster-assert.yaml
+      catch:
+        - describe:
+            apiVersion: postgresql.cnpg.io/v1
+            kind: Cluster
+        - describe:
+            apiVersion: postgresql.cnpg.io/v1
+            kind: Subscription
+    - name: Create table schema on subscriber
+      try:
+        - apply:
+            file: ./04-create-schema-on-subscriber.yaml
+        - assert:
+            file: ./04-create-schema-on-subscriber-assert.yaml
+      catch:
+        - describe:
+            apiVersion: batch/v1
+            kind: Job
+        - podLogs:
+            selector: batch.kubernetes.io/job-name=create-schema-on-subscriber
+    - name: Trigger subscription reconciliation
+      try:
+        - script:
+            content: |
+              # Delete and recreate subscription to trigger fresh reconciliation
+              kubectl delete subscription subscriber-cluster-from-users-only -n $NAMESPACE 2>/dev/null || true
+              helm upgrade \
+                --install \
+                --namespace $NAMESPACE \
+                --values ./03-subscriber-cluster.yaml \
+                subscriber ../../
+    - name: Wait for subscription to be applied
+      timeouts:
+        assert: 3m
+      try:
+        - assert:
+            file: ./04-subscription-applied-assert.yaml
+      catch:
+        - describe:
+            apiVersion: postgresql.cnpg.io/v1
+            kind: Subscription
+    - name: Write additional data to publisher
+      try:
+        - apply:
+            file: ./05-write-data-to-publisher.yaml
+        - assert:
+            file: ./05-write-data-to-publisher-assert.yaml
+      catch:
+        - describe:
+            apiVersion: batch/v1
+            kind: Job
+        - podLogs:
+            selector: batch.kubernetes.io/job-name=write-data-to-publisher
+    - name: Verify replication to subscriber
+      timeouts:
+        assert: 5m
+      try:
+        - apply:
+            file: ./06-verify-replication.yaml
+        - assert:
+            file: ./06-verify-replication-assert.yaml
+      catch:
+        - describe:
+            apiVersion: batch/v1
+            kind: Job
+        - podLogs:
+            selector: batch.kubernetes.io/job-name=verify-replication
+    - name: Cleanup
+      try:
+        - script:
+            content: |
+              helm uninstall --namespace $NAMESPACE publisher
+              helm uninstall --namespace $NAMESPACE subscriber

@@ -1,0 +1,88 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: verify-replication
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: verify-replication
+        env:
+          - name: DB_USER
+            valueFrom:
+              secretKeyRef:
+                name: subscriber-cluster-superuser
+                key: username
+          - name: DB_PASS
+            valueFrom:
+              secretKeyRef:
+                name: subscriber-cluster-superuser
+                key: password
+          - name: DB_URI
+            value: postgres://$(DB_USER):$(DB_PASS)@subscriber-cluster-rw:5432/app
+        image: alpine:3.19
+        command: ['sh', '-c']
+        args:
+         - |
+           set -e
+           apk --no-cache add postgresql-client
+           # Wait for replication to complete (with retries)
+           MAX_RETRIES=30
+           RETRY_INTERVAL=5
+           EXPECTED_REPLICATED_COUNT=5
+
+           for i in $(seq 1 $MAX_RETRIES); do
+             echo "Attempt $i/$MAX_RETRIES: Checking replication status..."
+
+             # Check replicated_schema.data row count (should have data)
+             REPLICATED_COUNT=$(psql "$DB_URI" -t -c "SELECT COUNT(*) FROM replicated_schema.data;" 2>/dev/null | tr -d ' ' || echo "0")
+             echo "replicated_schema.data row count: $REPLICATED_COUNT (expected $EXPECTED_REPLICATED_COUNT)"
+
+             if [ "$REPLICATED_COUNT" -eq "$EXPECTED_REPLICATED_COUNT" ]; then
+               echo "SUCCESS: replicated_schema replication verified! Found $REPLICATED_COUNT rows"
+
+               # Show replicated data
+               echo "replicated_schema.data contents:"
+               psql "$DB_URI" -c "SELECT * FROM replicated_schema.data ORDER BY id;"
+
+               # Check that excluded_schema does NOT exist on subscriber
+               EXCLUDED_SCHEMA_EXISTS=$(psql "$DB_URI" -t -c "SELECT EXISTS (SELECT FROM information_schema.schemata WHERE schema_name = 'excluded_schema');" | tr -d ' ')
+               echo "excluded_schema exists on subscriber: $EXCLUDED_SCHEMA_EXISTS"
+
+               if [ "$EXCLUDED_SCHEMA_EXISTS" = "f" ]; then
+                 echo "SUCCESS: excluded_schema correctly NOT replicated (schema does not exist)"
+                 exit 0
+               else
+                 # If excluded_schema exists, check it has no tables/data
+                 EXCLUDED_TABLE_EXISTS=$(psql "$DB_URI" -t -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'excluded_schema' AND table_name = 'data');" | tr -d ' ')
+                 if [ "$EXCLUDED_TABLE_EXISTS" = "f" ]; then
+                   echo "SUCCESS: excluded_schema exists but has no 'data' table (correct behavior)"
+                   exit 0
+                 else
+                   EXCLUDED_COUNT=$(psql "$DB_URI" -t -c "SELECT COUNT(*) FROM excluded_schema.data;" 2>/dev/null | tr -d ' ' || echo "0")
+                   if [ "$EXCLUDED_COUNT" -eq "0" ]; then
+                     echo "SUCCESS: excluded_schema.data exists but has no data (correct behavior)"
+                     exit 0
+                   else
+                     echo "ERROR: excluded_schema.data has $EXCLUDED_COUNT rows but should have 0"
+                     exit 1
+                   fi
+                 fi
+               fi
+             fi
+
+             if [ "$i" -lt "$MAX_RETRIES" ]; then
+               echo "Waiting ${RETRY_INTERVAL}s for replication to complete..."
+               sleep $RETRY_INTERVAL
+             fi
+           done
+
+           echo "ERROR: Replication verification failed after $MAX_RETRIES attempts"
+           echo "Expected $EXPECTED_REPLICATED_COUNT rows in replicated_schema.data, found $REPLICATED_COUNT"
+
+           # Debug info
+           echo "=== Subscription status ==="
+           psql "$DB_URI" -c "SELECT * FROM pg_stat_subscription;"
+
+           exit 1

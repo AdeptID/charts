@@ -1,0 +1,38 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: write-data-to-publisher
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: write-data
+        env:
+          - name: DB_USER
+            valueFrom:
+              secretKeyRef:
+                name: publisher-cluster-superuser
+                key: username
+          - name: DB_PASS
+            valueFrom:
+              secretKeyRef:
+                name: publisher-cluster-superuser
+                key: password
+          - name: DB_URI
+            value: postgres://$(DB_USER):$(DB_PASS)@publisher-cluster-rw:5432/app
+        image: alpine:3.19
+        command: ['sh', '-c']
+        args:
+         - |
+           set -e
+           apk --no-cache add postgresql-client
+           # Write additional data to users table (should replicate)
+           psql "$DB_URI" -c "INSERT INTO users (name, email) VALUES ('replicated_user_1', 'rep1@example.com'), ('replicated_user_2', 'rep2@example.com');"
+           # Write additional data to orders table (should NOT replicate)
+           psql "$DB_URI" -c "INSERT INTO orders (user_id, amount) VALUES (1, 999.99), (2, 888.88);"
+           echo "Additional data written to publisher"
+           echo "Users table count:"
+           psql "$DB_URI" -c "SELECT COUNT(*) FROM users;"
+           echo "Orders table count:"
+           psql "$DB_URI" -c "SELECT COUNT(*) FROM orders;"

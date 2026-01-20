@@ -1,0 +1,82 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: verify-replication
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: verify-replication
+        env:
+          - name: DB_USER
+            valueFrom:
+              secretKeyRef:
+                name: subscriber-cluster-superuser
+                key: username
+          - name: DB_PASS
+            valueFrom:
+              secretKeyRef:
+                name: subscriber-cluster-superuser
+                key: password
+          - name: DB_URI
+            value: postgres://$(DB_USER):$(DB_PASS)@subscriber-cluster-rw:5432/app
+        image: alpine:3.19
+        command: ['sh', '-c']
+        args:
+         - |
+           set -e
+           apk --no-cache add postgresql-client
+           # Wait for replication to complete (with retries)
+           MAX_RETRIES=30
+           RETRY_INTERVAL=5
+           EXPECTED_USERS_COUNT=5
+
+           for i in $(seq 1 $MAX_RETRIES); do
+             echo "Attempt $i/$MAX_RETRIES: Checking replication status..."
+
+             # Check users table row count (should have data)
+             USERS_COUNT=$(psql "$DB_URI" -t -c "SELECT COUNT(*) FROM users;" 2>/dev/null | tr -d ' ' || echo "0")
+             echo "Users table row count: $USERS_COUNT (expected $EXPECTED_USERS_COUNT)"
+
+             if [ "$USERS_COUNT" -eq "$EXPECTED_USERS_COUNT" ]; then
+               echo "SUCCESS: Users table replication verified! Found $USERS_COUNT rows"
+
+               # Verify the replicated data exists
+               echo "Users table contents:"
+               psql "$DB_URI" -c "SELECT * FROM users ORDER BY id;"
+
+               # Check that orders table does NOT exist on subscriber
+               ORDERS_EXISTS=$(psql "$DB_URI" -t -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'orders');" | tr -d ' ')
+               echo "Orders table exists on subscriber: $ORDERS_EXISTS"
+
+               if [ "$ORDERS_EXISTS" = "f" ]; then
+                 echo "SUCCESS: Orders table correctly NOT replicated (table does not exist)"
+                 exit 0
+               else
+                 # If orders table exists, verify it has no data (it shouldn't have been created)
+                 ORDERS_COUNT=$(psql "$DB_URI" -t -c "SELECT COUNT(*) FROM orders;" 2>/dev/null | tr -d ' ' || echo "0")
+                 if [ "$ORDERS_COUNT" -eq "0" ]; then
+                   echo "SUCCESS: Orders table exists but has no data (correct behavior)"
+                   exit 0
+                 else
+                   echo "ERROR: Orders table has $ORDERS_COUNT rows but should have 0"
+                   exit 1
+                 fi
+               fi
+             fi
+
+             if [ "$i" -lt "$MAX_RETRIES" ]; then
+               echo "Waiting ${RETRY_INTERVAL}s for replication to complete..."
+               sleep $RETRY_INTERVAL
+             fi
+           done
+
+           echo "ERROR: Replication verification failed after $MAX_RETRIES attempts"
+           echo "Expected $EXPECTED_USERS_COUNT users rows, found $USERS_COUNT"
+
+           # Debug info
+           echo "=== Subscription status ==="
+           psql "$DB_URI" -c "SELECT * FROM pg_stat_subscription;"
+
+           exit 1

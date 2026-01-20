@@ -1,0 +1,6 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Publication
+metadata:
+  name: publisher-cluster-schema-only
+status:
+  applied: true

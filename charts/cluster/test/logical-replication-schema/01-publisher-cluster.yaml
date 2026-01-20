@@ -1,0 +1,27 @@
+type: postgresql
+mode: standalone
+
+cluster:
+  instances: 1
+  storage:
+    size: 256Mi
+  # Enable superuser access to allow creating publications
+  enableSuperuserAccess: true
+  postgresql:
+    # wal_level: logical is required for logical replication
+    parameters:
+      wal_level: logical
+      max_replication_slots: "10"
+      max_wal_senders: "10"
+
+# Publication for all tables in a specific schema only (PostgreSQL 15+)
+publications:
+  - name: schema-only
+    dbname: app
+    target:
+      objects:
+        - tablesInSchema: replicated_schema
+    publicationReclaimPolicy: delete
+
+backups:
+  enabled: false

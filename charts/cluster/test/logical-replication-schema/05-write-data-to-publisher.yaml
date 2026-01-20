@@ -1,0 +1,38 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: write-data-to-publisher
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: write-data
+        env:
+          - name: DB_USER
+            valueFrom:
+              secretKeyRef:
+                name: publisher-cluster-superuser
+                key: username
+          - name: DB_PASS
+            valueFrom:
+              secretKeyRef:
+                name: publisher-cluster-superuser
+                key: password
+          - name: DB_URI
+            value: postgres://$(DB_USER):$(DB_PASS)@publisher-cluster-rw:5432/app
+        image: alpine:3.19
+        command: ['sh', '-c']
+        args:
+         - |
+           set -e
+           apk --no-cache add postgresql-client
+           # Write additional data to replicated_schema (should replicate)
+           psql "$DB_URI" -c "INSERT INTO replicated_schema.data (value) VALUES ('new_replicated_1'), ('new_replicated_2');"
+           # Write additional data to excluded_schema (should NOT replicate)
+           psql "$DB_URI" -c "INSERT INTO excluded_schema.data (value) VALUES ('new_excluded_1'), ('new_excluded_2');"
+           echo "Additional data written to publisher"
+           echo "replicated_schema.data count:"
+           psql "$DB_URI" -c "SELECT COUNT(*) FROM replicated_schema.data;"
+           echo "excluded_schema.data count:"
+           psql "$DB_URI" -c "SELECT COUNT(*) FROM excluded_schema.data;"

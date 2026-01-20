@@ -1,0 +1,6 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-schema-on-subscriber
+status:
+  succeeded: 1

@@ -1,0 +1,45 @@
+# Publisher cluster for logical replication
+# Deploy first, then deploy the subscriber
+
+type: postgresql
+mode: standalone
+
+cluster:
+  instances: 1
+  # Superuser required for FOR ALL TABLES publications
+  # For specific tables, table ownership is sufficient
+  enableSuperuserAccess: true
+  postgresql:
+    # Required PostgreSQL parameters for logical replication
+    parameters:
+      wal_level: logical
+      max_replication_slots: "10"
+      max_wal_senders: "10"
+
+# Publication configuration - defines what data to replicate
+publications:
+  - name: all-tables
+    dbname: app
+    target:
+      allTables: true
+    publicationReclaimPolicy: delete
+
+# Alternative: Publish specific tables only
+# publications:
+#   - name: users-only
+#     dbname: app
+#     target:
+#       objects:
+#         - table:
+#             name: users
+#             schema: public
+#     publicationReclaimPolicy: delete
+
+# Alternative: Publish all tables in a specific schema (PostgreSQL 15+)
+# publications:
+#   - name: schema-only
+#     dbname: app
+#     target:
+#       objects:
+#         - tablesInSchema: my_schema
+#     publicationReclaimPolicy: delete

@@ -1,0 +1,45 @@
+# Subscriber cluster for logical replication
+# Deploy after the publisher is ready
+#
+# Prerequisites:
+#   1. Publisher cluster deployed and ready
+#   2. Tables created on publisher (they will be replicated)
+#   3. Same table schema must exist on subscriber before subscription activates (DDL is not replicated)
+
+type: postgresql
+mode: standalone
+
+cluster:
+  instances: 1
+  # Superuser or pg_create_subscription role (PostgreSQL 16+) required to create subscriptions
+  enableSuperuserAccess: true
+
+# Subscription configuration defines what data to receive
+# Note: Subscription names must not contain hyphens (PostgreSQL replication slot restriction)
+subscriptions:
+  - name: from_publisher
+    dbname: app
+    publicationName: all-tables
+    externalClusterName: publisher
+    subscriptionReclaimPolicy: delete
+
+# External cluster connection to the publisher
+# Note: Must use a user with REPLICATION privilege
+logicalReplication:
+  externalClusters:
+    - name: publisher
+      # Replace with your publisher service name
+      host: publisher-cluster-rw
+      port: 5432
+      username: postgres
+      database: app
+      sslMode: require
+      passwordSecret:
+        # Set to true to auto-create, or false to use existing secret
+        create: false
+        # Secret containing password for user with REPLICATION privilege
+        name: publisher-cluster-superuser
+        key: password
+
+backups:
+  enabled: false
