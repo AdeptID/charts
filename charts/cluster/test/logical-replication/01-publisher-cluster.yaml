@@ -1,0 +1,26 @@
+type: postgresql
+mode: standalone
+
+cluster:
+  instances: 1
+  storage:
+    size: 256Mi
+  # Enable superuser access to allow creating publications
+  enableSuperuserAccess: true
+  postgresql:
+    # wal_level: logical is required for logical replication
+    parameters:
+      wal_level: logical
+      max_replication_slots: "10"
+      max_wal_senders: "10"
+
+# Publication for all tables in the app database
+publications:
+  - name: all-tables
+    dbname: app
+    target:
+      allTables: true
+    publicationReclaimPolicy: delete
+
+backups:
+  enabled: false

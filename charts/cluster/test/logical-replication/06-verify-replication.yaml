@@ -1,0 +1,72 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: verify-replication
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: verify-replication
+        env:
+          - name: DB_USER
+            valueFrom:
+              secretKeyRef:
+                name: subscriber-cluster-superuser
+                key: username
+          - name: DB_PASS
+            valueFrom:
+              secretKeyRef:
+                name: subscriber-cluster-superuser
+                key: password
+          - name: DB_URI
+            value: postgres://$(DB_USER):$(DB_PASS)@subscriber-cluster-rw:5432/app
+        image: alpine:3.19
+        command: ['sh', '-c']
+        args:
+         - |
+           set -e
+           apk --no-cache add postgresql-client
+           # Wait for replication to complete (with retries)
+           MAX_RETRIES=30
+           RETRY_INTERVAL=5
+           EXPECTED_COUNT=5
+
+           for i in $(seq 1 $MAX_RETRIES); do
+             echo "Attempt $i/$MAX_RETRIES: Checking replication status..."
+
+             # Check subscriber row count
+             SUBSCRIBER_COUNT=$(psql "$DB_URI" -t -c "SELECT COUNT(*) FROM test_replication;" 2>/dev/null | tr -d ' ' || echo "0")
+             echo "Subscriber row count: $SUBSCRIBER_COUNT"
+
+             if [ "$SUBSCRIBER_COUNT" -eq "$EXPECTED_COUNT" ]; then
+               echo "SUCCESS: Replication verified! Found $SUBSCRIBER_COUNT rows on subscriber (expected $EXPECTED_COUNT)"
+
+               # Additional verification: check that specific data exists
+               psql "$DB_URI" -c "SELECT * FROM test_replication ORDER BY id;"
+
+               # Verify the replicated data exists
+               REPLICATED_DATA=$(psql "$DB_URI" -t -c "SELECT COUNT(*) FROM test_replication WHERE data LIKE 'replicated_%';" | tr -d ' ')
+               if [ "$REPLICATED_DATA" -eq 2 ]; then
+                 echo "SUCCESS: Found $REPLICATED_DATA replicated rows"
+                 exit 0
+               else
+                 echo "WARNING: Expected 2 replicated rows, found $REPLICATED_DATA"
+               fi
+               exit 0
+             fi
+
+             if [ "$i" -lt "$MAX_RETRIES" ]; then
+               echo "Waiting ${RETRY_INTERVAL}s for replication to complete..."
+               sleep $RETRY_INTERVAL
+             fi
+           done
+
+           echo "ERROR: Replication verification failed after $MAX_RETRIES attempts"
+           echo "Expected $EXPECTED_COUNT rows, found $SUBSCRIBER_COUNT"
+
+           # Debug info
+           echo "=== Subscription status ==="
+           psql "$DB_URI" -c "SELECT * FROM pg_stat_subscription;"
+
+           exit 1

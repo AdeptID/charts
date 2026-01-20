@@ -1,0 +1,33 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-schema-on-subscriber
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: create-schema
+        env:
+          - name: DB_USER
+            valueFrom:
+              secretKeyRef:
+                name: subscriber-cluster-superuser
+                key: username
+          - name: DB_PASS
+            valueFrom:
+              secretKeyRef:
+                name: subscriber-cluster-superuser
+                key: password
+          - name: DB_URI
+            value: postgres://$(DB_USER):$(DB_PASS)@subscriber-cluster-rw:5432/app
+        image: alpine:3.19
+        command: ['sh', '-c']
+        args:
+         - |
+           set -e
+           apk --no-cache add postgresql-client
+           # Create the same table schema as on the publisher
+           # This is required for CNPG logical replication - the schema must pre-exist
+           psql "$DB_URI" -c "CREATE TABLE IF NOT EXISTS test_replication (id serial PRIMARY KEY, data text, created_at timestamp DEFAULT now());"
+           echo "Schema created on subscriber successfully"

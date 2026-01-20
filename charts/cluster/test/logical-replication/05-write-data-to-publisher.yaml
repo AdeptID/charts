@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: write-data-to-publisher
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: write-data
+        env:
+          - name: DB_USER
+            valueFrom:
+              secretKeyRef:
+                name: publisher-cluster-superuser
+                key: username
+          - name: DB_PASS
+            valueFrom:
+              secretKeyRef:
+                name: publisher-cluster-superuser
+                key: password
+          - name: DB_URI
+            value: postgres://$(DB_USER):$(DB_PASS)@publisher-cluster-rw:5432/app
+        image: alpine:3.19
+        command: ['sh', '-c']
+        args:
+         - |
+           set -e
+           apk --no-cache add postgresql-client
+           # Insert additional data after subscription is active
+           psql "$DB_URI" -c "INSERT INTO test_replication (data) VALUES ('replicated_row_1'), ('replicated_row_2');"
+           # Verify total count on publisher
+           PUBLISHER_COUNT=$(psql "$DB_URI" -t -c "SELECT COUNT(*) FROM test_replication;" | tr -d ' ')
+           echo "Publisher row count: $PUBLISHER_COUNT"
+           if [ "$PUBLISHER_COUNT" -ne 5 ]; then
+             echo "ERROR: Expected 5 rows on publisher, got $PUBLISHER_COUNT"
+             exit 1
+           fi
+           echo "Additional data written to publisher successfully"

@@ -105,6 +105,58 @@ Each backup adapter takes it's own set of parameters, listed in the [Configurati
 below. Refer to the table for the full list of parameters and place the configuration under the appropriate key: `backup.s3`,
 `backup.azure`, or `backup.google`.
 
+### Logical Replication
+
+The chart supports [CNPG's declarative logical replication](https://cloudnative-pg.io/documentation/current/declarative_publication_management/)
+through Publication and Subscription CRDs.
+
+**Requirements:**
+- Publisher cluster must have `wal_level: logical` set in `cluster.postgresql.parameters`
+- Table schemas must exist on the subscriber before the subscription becomes active
+- The user connecting from subscriber to publisher must have REPLICATION privilege
+
+**Publisher cluster example:**
+```yaml
+cluster:
+  postgresql:
+    parameters:
+      wal_level: logical
+
+publications:
+  - name: all-tables
+    dbname: app
+    target:
+      allTables: true
+    publicationReclaimPolicy: delete
+```
+
+**Subscriber cluster example:**
+```yaml
+subscriptions:
+  - name: from_publisher       # Note: Use underscores, not hyphens
+    dbname: app
+    publicationName: all-tables
+    externalClusterName: publisher
+    subscriptionReclaimPolicy: delete
+
+logicalReplication:
+  externalClusters:
+    - name: publisher
+      host: publisher-cluster-rw.default.svc
+      port: 5432
+      username: postgres        # Must have REPLICATION privilege
+      database: app
+      sslMode: require
+      passwordSecret:
+        name: publisher-cluster-superuser
+        key: password
+```
+
+**Important notes:**
+- Subscription names must use underscores (`from_publisher`), not hyphens (`from-publisher`), due to PostgreSQL replication slot naming constraints
+- The external cluster connection typically uses the `postgres` superuser since it has REPLICATION privilege
+- See the [CloudNativePG documentation](https://cloudnative-pg.io/documentation/current/declarative_subscription_management/) for advanced configuration options
+
 
 Recovery
 --------

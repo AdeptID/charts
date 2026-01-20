@@ -29,4 +29,9 @@ externalClusters:
 {{- else }}
   {{ fail "Invalid cluster mode!" }}
 {{- end }}
+{{- /* Append logical replication external clusters for all modes */}}
+{{- range .Values.logicalReplication.externalClusters }}
+  - name: {{ .name }}
+    {{- include "cluster.externalSourceCluster" . | nindent 4 }}
+{{- end }}
 {{ end }}

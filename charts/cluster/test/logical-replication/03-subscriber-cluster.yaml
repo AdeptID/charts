@@ -1,0 +1,35 @@
+type: postgresql
+mode: standalone
+
+cluster:
+  instances: 1
+  storage:
+    size: 256Mi
+  enableSuperuserAccess: true
+
+# Subscription to receive data from publisher
+# Note: Subscription name must not contain hyphens (invalid for replication slots)
+subscriptions:
+  - name: from_publisher
+    dbname: app
+    publicationName: all-tables
+    externalClusterName: publisher
+    subscriptionReclaimPolicy: delete
+
+# External cluster connection to the publisher
+# Note: Must use a user with REPLICATION privilege (postgres superuser)
+logicalReplication:
+  externalClusters:
+    - name: publisher
+      host: publisher-cluster-rw
+      port: 5432
+      username: postgres
+      database: app
+      sslMode: require
+      passwordSecret:
+        create: false
+        name: publisher-cluster-superuser
+        key: password
+
+backups:
+  enabled: false

@@ -1,0 +1,36 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-table-and-publication
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: create-table
+        env:
+          - name: DB_USER
+            valueFrom:
+              secretKeyRef:
+                name: publisher-cluster-superuser
+                key: username
+          - name: DB_PASS
+            valueFrom:
+              secretKeyRef:
+                name: publisher-cluster-superuser
+                key: password
+          - name: DB_URI
+            value: postgres://$(DB_USER):$(DB_PASS)@publisher-cluster-rw:5432/app
+        image: alpine:3.19
+        command: ['sh', '-c']
+        args:
+         - |
+           set -e
+           apk --no-cache add postgresql-client
+           # Create test table
+           psql "$DB_URI" -c "CREATE TABLE test_replication (id serial PRIMARY KEY, data text, created_at timestamp DEFAULT now());"
+           # Insert initial data
+           psql "$DB_URI" -c "INSERT INTO test_replication (data) VALUES ('initial_row_1'), ('initial_row_2'), ('initial_row_3');"
+           # Verify data was inserted
+           psql "$DB_URI" -c "SELECT COUNT(*) FROM test_replication;"
+           echo "Table created and initial data inserted successfully"

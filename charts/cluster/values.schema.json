@@ -929,6 +929,163 @@
                     "type": "string"
                 }
             }
+        },
+        "publications": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "dbname": {
+                        "type": "string"
+                    },
+                    "target": {
+                        "type": "object",
+                        "properties": {
+                            "allTables": {
+                                "type": "boolean"
+                            },
+                            "objects": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "table": {
+                                            "type": "object",
+                                            "properties": {
+                                                "name": {
+                                                    "type": "string"
+                                                },
+                                                "schema": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        },
+                                        "tablesInSchema": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "parameters": {
+                        "type": "object"
+                    },
+                    "publicationReclaimPolicy": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "subscriptions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "dbname": {
+                        "type": "string"
+                    },
+                    "publicationName": {
+                        "type": "string"
+                    },
+                    "externalClusterName": {
+                        "type": "string"
+                    },
+                    "parameters": {
+                        "type": "object"
+                    },
+                    "subscriptionReclaimPolicy": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "logicalReplication": {
+            "type": "object",
+            "properties": {
+                "externalClusters": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string"
+                            },
+                            "host": {
+                                "type": "string"
+                            },
+                            "port": {
+                                "type": "integer"
+                            },
+                            "username": {
+                                "type": "string"
+                            },
+                            "database": {
+                                "type": "string"
+                            },
+                            "sslMode": {
+                                "type": "string"
+                            },
+                            "passwordSecret": {
+                                "type": "object",
+                                "properties": {
+                                    "create": {
+                                        "type": "boolean"
+                                    },
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "key": {
+                                        "type": "string"
+                                    },
+                                    "value": {
+                                        "type": "string"
+                                    }
+                                }
+                            },
+                            "sslKeySecret": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "key": {
+                                        "type": "string"
+                                    }
+                                }
+                            },
+                            "sslCertSecret": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "key": {
+                                        "type": "string"
+                                    }
+                                }
+                            },
+                            "sslRootCertSecret": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "key": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

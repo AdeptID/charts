@@ -597,6 +597,63 @@ databases: []
  #   builtinLocale: ""              # -- Maps to the BUILTIN_LOCALE parameter. Available from PostgreSQL 17.
  #   collationVersion: ""           # -- Maps to the COLLATION_VERSION parameter.
 
+##
+# -- Logical replication publications.
+# Publications define what data to replicate from this cluster.
+# Requires wal_level: logical in cluster.postgresql.parameters.
+# See: https://cloudnative-pg.io/documentation/current/declarative_publication_management/
+publications: []
+  # - name: my-publication            # -- Name of the publication.
+  #   dbname: app                     # -- Database where the publication will be created.
+  #   target:                         # -- Specifies what tables to publish. Use allTables OR objects.
+  #     allTables: true               # -- If true, publishes all tables in the database.
+  #     # objects:                    # -- List of specific objects to publish (mutually exclusive with allTables).
+  #     #   - schema: public
+  #     #     table: users
+  #   parameters:                     # -- Publication parameters (optional).
+  #     publish: "insert,update,delete"
+  #   publicationReclaimPolicy: delete  # -- One of: retain / delete (retain by default).
+
+##
+# -- Logical replication subscriptions.
+# Subscriptions receive data from a publication on another cluster.
+# Requires an externalCluster entry in logicalReplication.externalClusters.
+# See: https://cloudnative-pg.io/documentation/current/declarative_subscription_management/
+subscriptions: []
+  # - name: my-subscription           # -- Name of the subscription.
+  #   dbname: app                     # -- Database where the subscription will be created.
+  #   publicationName: my-publication # -- Name of the publication to subscribe to on the external cluster.
+  #   externalClusterName: source-cluster  # -- Name of the external cluster (must be defined in logicalReplication.externalClusters).
+  #   parameters:                     # -- Subscription parameters (optional).
+  #     copy_data: "true"
+  #   subscriptionReclaimPolicy: delete  # -- One of: retain / delete (retain by default).
+
+##
+# -- Logical replication external cluster connections.
+# Defines connections to external clusters for logical replication subscriptions.
+logicalReplication:
+  externalClusters: []
+    # - name: source-cluster          # -- Name used to reference this external cluster in subscriptions.
+    #   host: source-rw.default.svc   # -- Hostname of the external cluster.
+    #   port: 5432                    # -- Port of the external cluster.
+    #   username: app                 # -- Username for connecting to the external cluster.
+    #   database: app                 # -- Database to connect to on the external cluster.
+    #   sslMode: verify-full          # -- SSL mode for the connection.
+    #   passwordSecret:               # -- Secret containing the password.
+    #     create: false               # -- Whether to create a secret from the value below.
+    #     name: source-app            # -- Name of the secret containing the password.
+    #     key: password               # -- Key in the secret containing the password.
+    #     value: ""                   # -- Password value (only used when create: true).
+    #   sslKeySecret:                 # -- Secret containing the SSL key (optional).
+    #     name: ""
+    #     key: ""
+    #   sslCertSecret:                # -- Secret containing the SSL certificate (optional).
+    #     name: ""
+    #     key: ""
+    #   sslRootCertSecret:            # -- Secret containing the SSL root certificate (optional).
+    #     name: ""
+    #     key: ""
+
 imageCatalog:
   # -- Whether to provision an image catalog. If imageCatalog.images is empty this option will be ignored.
   create: true
