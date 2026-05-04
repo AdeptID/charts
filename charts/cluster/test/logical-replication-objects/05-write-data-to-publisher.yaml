@@ -31,8 +31,8 @@ spec:
            psql "$DB_URI" -c "INSERT INTO users (name, email) VALUES ('replicated_user_1', 'rep1@example.com'), ('replicated_user_2', 'rep2@example.com');"
            # Write additional data to orders table (should NOT replicate)
            psql "$DB_URI" -c "INSERT INTO orders (user_id, amount) VALUES (1, 999.99), (2, 888.88);"
-           echo "Additional data written to publisher"
-           echo "Users table count:"
-           psql "$DB_URI" -c "SELECT COUNT(*) FROM users;"
-           echo "Orders table count:"
-           psql "$DB_URI" -c "SELECT COUNT(*) FROM orders;"
+           # Verify data counts after inserts
+           test "$(psql "$DB_URI" -t -c 'SELECT COUNT(*) FROM users;' --csv -q | tr -d ' ')" = "5"
+           echo "users table has 5 rows"
+           test "$(psql "$DB_URI" -t -c 'SELECT COUNT(*) FROM orders;' --csv -q | tr -d ' ')" = "5"
+           echo "orders table has 5 rows"

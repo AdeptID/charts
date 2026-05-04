@@ -31,4 +31,7 @@ spec:
            # This is required for CNPG logical replication - the schema must pre-exist
            psql "$DB_URI" -c "CREATE SCHEMA IF NOT EXISTS replicated_schema;"
            psql "$DB_URI" -c "CREATE TABLE IF NOT EXISTS replicated_schema.data (id serial PRIMARY KEY, value text, created_at timestamp DEFAULT now());"
-           echo "replicated_schema created on subscriber (excluded_schema NOT created)"
+           test "$(psql "$DB_URI" -t -c "SELECT EXISTS (SELECT FROM information_schema.schemata WHERE schema_name = 'replicated_schema');" --csv -q)" = "t"
+           echo "replicated_schema exists on subscriber"
+           test "$(psql "$DB_URI" -t -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'replicated_schema' AND table_name = 'data');" --csv -q)" = "t"
+           echo "replicated_schema.data table exists on subscriber (excluded_schema NOT created)"

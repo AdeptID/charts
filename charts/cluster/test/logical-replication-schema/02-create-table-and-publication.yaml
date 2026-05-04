@@ -40,8 +40,7 @@ spec:
            # Insert initial data into excluded_schema
            psql "$DB_URI" -c "INSERT INTO excluded_schema.data (value) VALUES ('excluded_row_1'), ('excluded_row_2'), ('excluded_row_3');"
            # Verify data was inserted
-           echo "replicated_schema.data table:"
-           psql "$DB_URI" -c "SELECT COUNT(*) FROM replicated_schema.data;"
-           echo "excluded_schema.data table:"
-           psql "$DB_URI" -c "SELECT COUNT(*) FROM excluded_schema.data;"
-           echo "Schemas and tables created with initial data"
+           test "$(psql "$DB_URI" -t -c 'SELECT COUNT(*) FROM replicated_schema.data;' --csv -q | tr -d ' ')" = "3"
+           echo "replicated_schema.data table has 3 rows"
+           test "$(psql "$DB_URI" -t -c 'SELECT COUNT(*) FROM excluded_schema.data;' --csv -q | tr -d ' ')" = "3"
+           echo "excluded_schema.data table has 3 rows"

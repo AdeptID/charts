@@ -36,8 +36,7 @@ spec:
            # Insert initial data into orders
            psql "$DB_URI" -c "INSERT INTO orders (user_id, amount) VALUES (1, 100.00), (2, 200.00), (3, 300.00);"
            # Verify data was inserted
-           echo "Users table:"
-           psql "$DB_URI" -c "SELECT COUNT(*) FROM users;"
-           echo "Orders table:"
-           psql "$DB_URI" -c "SELECT COUNT(*) FROM orders;"
-           echo "Tables created and initial data inserted successfully"
+           test "$(psql "$DB_URI" -t -c 'SELECT COUNT(*) FROM users;' --csv -q | tr -d ' ')" = "3"
+           echo "users table has 3 rows"
+           test "$(psql "$DB_URI" -t -c 'SELECT COUNT(*) FROM orders;' --csv -q | tr -d ' ')" = "3"
+           echo "orders table has 3 rows"

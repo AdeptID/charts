@@ -31,8 +31,8 @@ spec:
            psql "$DB_URI" -c "INSERT INTO replicated_schema.data (value) VALUES ('new_replicated_1'), ('new_replicated_2');"
            # Write additional data to excluded_schema (should NOT replicate)
            psql "$DB_URI" -c "INSERT INTO excluded_schema.data (value) VALUES ('new_excluded_1'), ('new_excluded_2');"
-           echo "Additional data written to publisher"
-           echo "replicated_schema.data count:"
-           psql "$DB_URI" -c "SELECT COUNT(*) FROM replicated_schema.data;"
-           echo "excluded_schema.data count:"
-           psql "$DB_URI" -c "SELECT COUNT(*) FROM excluded_schema.data;"
+           # Verify data counts after inserts
+           test "$(psql "$DB_URI" -t -c 'SELECT COUNT(*) FROM replicated_schema.data;' --csv -q | tr -d ' ')" = "5"
+           echo "replicated_schema.data table has 5 rows"
+           test "$(psql "$DB_URI" -t -c 'SELECT COUNT(*) FROM excluded_schema.data;' --csv -q | tr -d ' ')" = "5"
+           echo "excluded_schema.data table has 5 rows"

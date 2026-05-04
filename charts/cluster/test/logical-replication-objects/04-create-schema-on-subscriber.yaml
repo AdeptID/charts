@@ -31,4 +31,5 @@ spec:
            # This is required for CNPG logical replication - the schema must pre-exist
            # We intentionally do NOT create the orders table to verify it's not replicated
            psql "$DB_URI" -c "CREATE TABLE IF NOT EXISTS users (id serial PRIMARY KEY, name text, email text, created_at timestamp DEFAULT now());"
-           echo "Users schema created on subscriber successfully (orders table NOT created)"
+           test "$(psql "$DB_URI" -t -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'users');" --csv -q)" = "t"
+           echo "users table exists on subscriber (orders table NOT created)"

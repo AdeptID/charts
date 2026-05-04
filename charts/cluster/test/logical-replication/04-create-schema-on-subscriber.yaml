@@ -30,4 +30,5 @@ spec:
            # Create the same table schema as on the publisher
            # This is required for CNPG logical replication - the schema must pre-exist
            psql "$DB_URI" -c "CREATE TABLE IF NOT EXISTS test_replication (id serial PRIMARY KEY, data text, created_at timestamp DEFAULT now());"
-           echo "Schema created on subscriber successfully"
+           test "$(psql "$DB_URI" -t -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'test_replication');" --csv -q)" = "t"
+           echo "test_replication table exists on subscriber"

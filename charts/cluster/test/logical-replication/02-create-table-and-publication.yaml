@@ -32,5 +32,5 @@ spec:
            # Insert initial data
            psql "$DB_URI" -c "INSERT INTO test_replication (data) VALUES ('initial_row_1'), ('initial_row_2'), ('initial_row_3');"
            # Verify data was inserted
-           psql "$DB_URI" -c "SELECT COUNT(*) FROM test_replication;"
-           echo "Table created and initial data inserted successfully"
+           test "$(psql "$DB_URI" -t -c 'SELECT COUNT(*) FROM test_replication;' --csv -q | tr -d ' ')" = "3"
+           echo "test_replication table has 3 rows"
